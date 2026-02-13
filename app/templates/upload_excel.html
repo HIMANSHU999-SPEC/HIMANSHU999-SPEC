@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Upload Excel - Stock Check System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5><i class="bi bi-file-earmark-excel"></i> Upload Stock Data from Excel</h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info">
+                    <strong><i class="bi bi-info-circle"></i> Instructions:</strong>
+                    <ol class="mb-0 mt-2">
+                        <li>Download the <a href="{{ url_for('excel.download_template') }}">Excel template</a> first.</li>
+                        <li>Fill in your stock data following the template columns.</li>
+                        <li>Required columns: <code>item_name</code>, <code>quantity</code></li>
+                        <li>Optional columns: <code>category</code>, <code>unit</code>, <code>unit_price</code>, <code>condition</code>, <code>remarks</code></li>
+                        <li>Select the target campus and upload the file.</li>
+                    </ol>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">Target Campus *</label>
+                        {{ form.campus_id(class="form-select") }}
+                        {% for error in form.campus_id.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Excel File (.xlsx) *</label>
+                        {{ form.file(class="form-control", accept=".xlsx,.xls") }}
+                        {% for error in form.file.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-success") }}
+                        <a href="{{ url_for('stock.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

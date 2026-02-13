@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - Stock Check System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="bi bi-box-seam"></i> {{ title }}</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Item Name *</label>
+                            {{ form.item_name(class="form-control", placeholder="e.g. Laptop, Chair, Projector") }}
+                            {% for error in form.item_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Category</label>
+                            {{ form.category(class="form-control", placeholder="e.g. Electronics, Furniture") }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Quantity *</label>
+                            {{ form.quantity(class="form-control", placeholder="0") }}
+                            {% for error in form.quantity.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Unit</label>
+                            {{ form.unit(class="form-control", placeholder="pcs/kg/litre") }}
+                        </div>
+
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Unit Price</label>
+                            {{ form.unit_price(class="form-control", placeholder="0.00") }}
+                        </div>
+
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Condition *</label>
+                            {{ form.condition(class="form-select") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Campus *</label>
+                        {{ form.campus_id(class="form-select") }}
+                        {% for error in form.campus_id.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        {{ form.remarks(class="form-control", rows=2, placeholder="Any additional notes...") }}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('stock.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+}
+
+main {
+    flex: 1;
+}
+
+.card {
+    border-radius: 0.5rem;
+}
+
+.card-header {
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+}
+
+.table th {
+    white-space: nowrap;
+}
+
+.btn-group-sm .btn {
+    padding: 0.2rem 0.4rem;
+}
+
+.navbar-brand i {
+    margin-right: 0.3rem;
+}
+
+.badge {
+    font-size: 0.8em;
+}
