@@ -12,14 +12,18 @@ login_manager.login_message_category = 'info'
 def create_app():
     app = Flask(__name__)
 
+    base_dir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+    instance_dir = os.path.join(base_dir, 'instance')
+    upload_dir = os.path.join(base_dir, 'uploads')
+
+    # Auto-create required directories if they don't exist
+    os.makedirs(instance_dir, exist_ok=True)
+    os.makedirs(upload_dir, exist_ok=True)
+
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(
-        os.path.abspath(os.path.dirname(os.path.dirname(__file__))), 'instance', 'stock.db'
-    )
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(instance_dir, 'stock.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['UPLOAD_FOLDER'] = os.path.join(
-        os.path.abspath(os.path.dirname(os.path.dirname(__file__))), 'uploads'
-    )
+    app.config['UPLOAD_FOLDER'] = upload_dir
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
 
     db.init_app(app)
