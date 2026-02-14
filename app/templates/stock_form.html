@@ -52,12 +52,23 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Campus *</label>
-                        {{ form.campus_id(class="form-select") }}
-                        {% for error in form.campus_id.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                        {% endfor %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Campus *</label>
+                            {{ form.campus_id(class="form-select") }}
+                            {% for error in form.campus_id.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Low Stock Threshold</label>
+                            {{ form.low_stock_threshold(class="form-control", placeholder="10") }}
+                            <small class="text-muted">Alert when quantity falls to or below this value</small>
+                            {% for error in form.low_stock_threshold.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
                     </div>
 
                     <div class="mb-3">

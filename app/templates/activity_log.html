@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Activity Log - Stock Check System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3><i class="bi bi-clock-history"></i> Activity Log</h3>
+    <a href="{{ url_for('stock.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Dashboard</a>
+</div>
+
+<!-- Filter -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <select name="action" class="form-select form-select-sm">
+                    <option value="">All Actions</option>
+                    <option value="created" {% if action_filter == 'created' %}selected{% endif %}>Created</option>
+                    <option value="updated" {% if action_filter == 'updated' %}selected{% endif %}>Updated</option>
+                    <option value="deleted" {% if action_filter == 'deleted' %}selected{% endif %}>Deleted</option>
+                    <option value="transferred_out" {% if action_filter == 'transferred_out' %}selected{% endif %}>Transferred Out</option>
+                    <option value="transferred_in" {% if action_filter == 'transferred_in' %}selected{% endif %}>Transferred In</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-filter"></i> Filter</button>
+            </div>
+            {% if action_filter %}
+            <div class="col-md-2">
+                <a href="{{ url_for('stock.activity_log') }}" class="btn btn-sm btn-outline-secondary w-100">Clear</a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if logs.items %}
+<div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+        <thead class="table-primary">
+            <tr>
+                <th>Timestamp</th>
+                <th>Action</th>
+                <th>Item</th>
+                <th>Campus</th>
+                <th>Field Changed</th>
+                <th>Old Value</th>
+                <th>New Value</th>
+                <th>Changed By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs.items %}
+            <tr>
+                <td class="text-nowrap small">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>
+                    {% if log.action == 'created' %}<span class="badge bg-success">Created</span>
+                    {% elif log.action == 'updated' %}<span class="badge bg-warning text-dark">Updated</span>
+                    {% elif log.action == 'deleted' %}<span class="badge bg-danger">Deleted</span>
+                    {% elif log.action == 'transferred_out' %}<span class="badge bg-info">Out</span>
+                    {% elif log.action == 'transferred_in' %}<span class="badge bg-primary">In</span>
+                    {% else %}<span class="badge bg-secondary">{{ log.action }}</span>{% endif %}
+                </td>
+                <td>{{ log.item_name }}</td>
+                <td>{{ log.campus_name or '-' }}</td>
+                <td>{{ log.field_changed or '-' }}</td>
+                <td>{{ log.old_value or '-' }}</td>
+                <td>{{ log.new_value or '-' }}</td>
+                <td>{{ log.changed_by }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<nav>
+    <ul class="pagination justify-content-center">
+        {% if logs.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('stock.activity_log', page=logs.prev_num, action=action_filter) }}">&laquo; Previous</a>
+        </li>
+        {% endif %}
+        {% for p in logs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {{ 'active' if p == logs.page else '' }}">
+                <a class="page-link" href="{{ url_for('stock.activity_log', page=p, action=action_filter) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        {% if logs.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('stock.activity_log', page=logs.next_num, action=action_filter) }}">Next &raquo;</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+<p class="text-muted text-center">Page {{ logs.page }} of {{ logs.pages }} ({{ logs.total }} entries)</p>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> No activity logs found.
+</div>
+{% endif %}
+{% endblock %}

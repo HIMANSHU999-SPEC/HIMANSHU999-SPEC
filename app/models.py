@@ -52,11 +52,57 @@ class Stock(db.Model):
     unit_price = db.Column(db.Float, nullable=True, default=0.0)
     total_value = db.Column(db.Float, nullable=True, default=0.0)
     condition = db.Column(db.String(50), nullable=True, default='Good')  # Good / Damaged / Needs Repair
+    low_stock_threshold = db.Column(db.Integer, nullable=True, default=10)
     remarks = db.Column(db.String(500), nullable=True)
     campus_id = db.Column(db.Integer, db.ForeignKey('campuses.id'), nullable=False)
     added_by = db.Column(db.String(80), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def is_low_stock(self):
+        threshold = self.low_stock_threshold if self.low_stock_threshold is not None else 10
+        return (self.quantity or 0) <= threshold
+
     def __repr__(self):
         return f'<Stock {self.item_name} @ {self.campus.name if self.campus else "N/A"}>'
+
+
+class StockHistory(db.Model):
+    """Audit trail for all stock changes."""
+    __tablename__ = 'stock_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    stock_id = db.Column(db.Integer, nullable=True)
+    item_name = db.Column(db.String(200), nullable=False)
+    campus_name = db.Column(db.String(120), nullable=True)
+    action = db.Column(db.String(50), nullable=False)  # created, updated, deleted, transferred_out, transferred_in
+    field_changed = db.Column(db.String(100), nullable=True)
+    old_value = db.Column(db.String(500), nullable=True)
+    new_value = db.Column(db.String(500), nullable=True)
+    changed_by = db.Column(db.String(80), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<StockHistory {self.action} {self.item_name} by {self.changed_by}>'
+
+
+class StockTransfer(db.Model):
+    """Track stock transfers between campuses."""
+    __tablename__ = 'stock_transfers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    stock_id = db.Column(db.Integer, db.ForeignKey('stocks.id'), nullable=True)
+    item_name = db.Column(db.String(200), nullable=False)
+    quantity_transferred = db.Column(db.Integer, nullable=False)
+    from_campus_id = db.Column(db.Integer, db.ForeignKey('campuses.id'), nullable=False)
+    to_campus_id = db.Column(db.Integer, db.ForeignKey('campuses.id'), nullable=False)
+    transferred_by = db.Column(db.String(80), nullable=False)
+    remarks = db.Column(db.String(500), nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    from_campus = db.relationship('Campus', foreign_keys=[from_campus_id])
+    to_campus = db.relationship('Campus', foreign_keys=[to_campus_id])
+
+    def __repr__(self):
+        return f'<Transfer {self.item_name} x{self.quantity_transferred}>'

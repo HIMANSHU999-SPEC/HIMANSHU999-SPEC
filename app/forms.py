@@ -40,9 +40,18 @@ class StockForm(FlaskForm):
     condition = SelectField('Condition', choices=[
         ('Good', 'Good'), ('Damaged', 'Damaged'), ('Needs Repair', 'Needs Repair')
     ], validators=[DataRequired()])
+    low_stock_threshold = IntegerField('Low Stock Threshold', validators=[Optional(), NumberRange(min=0)], default=10)
     campus_id = SelectField('Campus', coerce=int, validators=[DataRequired()])
     remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)])
     submit = SubmitField('Save Stock')
+
+
+class StockTransferForm(FlaskForm):
+    stock_id = SelectField('Stock Item', coerce=int, validators=[DataRequired()])
+    to_campus_id = SelectField('Transfer To Campus', coerce=int, validators=[DataRequired()])
+    quantity = IntegerField('Quantity to Transfer', validators=[DataRequired(), NumberRange(min=1)])
+    remarks = TextAreaField('Remarks', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Transfer Stock')
 
 
 class UploadExcelForm(FlaskForm):

@@ -8,6 +8,12 @@
         {% if campus.address %}<small class="text-muted"><i class="bi bi-geo-alt"></i> {{ campus.address }}</small>{% endif %}
     </div>
     <div>
+        <a href="{{ url_for('stock.transfer_stock', campus_id=campus.id) }}" class="btn btn-info btn-sm">
+            <i class="bi bi-arrow-left-right"></i> Transfer Stock
+        </a>
+        <a href="{{ url_for('stock.download_pdf', campus_id=campus.id) }}" class="btn btn-danger btn-sm">
+            <i class="bi bi-file-pdf"></i> PDF Report
+        </a>
         <a href="{{ url_for('excel.download_campus_stock', campus_id=campus.id) }}" class="btn btn-success btn-sm">
             <i class="bi bi-download"></i> Download Excel
         </a>
@@ -70,9 +76,12 @@
             {% for stock in stocks %}
             {% set row_total = (stock.quantity or 0) * (stock.unit_price or 0) %}
             {% set ns.total = ns.total + row_total %}
-            <tr>
+            <tr class="{{ 'table-danger' if stock.is_low_stock else '' }}">
                 <td>{{ loop.index }}</td>
-                <td>{{ stock.item_name }}</td>
+                <td>
+                    {{ stock.item_name }}
+                    {% if stock.is_low_stock %}<i class="bi bi-exclamation-triangle text-danger" title="Low Stock"></i>{% endif %}
+                </td>
                 <td>{{ stock.category or '-' }}</td>
                 <td>{{ stock.quantity }}</td>
                 <td>{{ stock.unit or '-' }}</td>
