@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Upload Excel - Stock Check System{% endblock %}
+{% block title %}Upload Excel - IT Stock Manager{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -15,8 +15,8 @@
                         <li>Download the <a href="{{ url_for('excel.download_template') }}">Excel template</a> first.</li>
                         <li>Fill in your stock data following the template columns.</li>
                         <li>Required columns: <code>item_name</code>, <code>quantity</code></li>
-                        <li>Optional columns: <code>category</code>, <code>unit</code>, <code>unit_price</code>, <code>condition</code>, <code>remarks</code></li>
-                        <li>Select the target campus and upload the file.</li>
+                        <li>Optional columns: <code>category</code>, <code>unit</code>, <code>unit_price</code>, <code>condition</code>, <code>status</code>, <code>asset_tag</code>, <code>serial_number</code>, <code>manufacturer</code>, <code>model</code>, <code>department</code>, <code>remarks</code></li>
+                        <li>Select the target campus and upload the file (.xlsx only).</li>
                     </ol>
                 </div>
 
@@ -33,7 +33,7 @@
 
                     <div class="mb-3">
                         <label class="form-label">Excel File (.xlsx) *</label>
-                        {{ form.file(class="form-control", accept=".xlsx,.xls") }}
+                        {{ form.file(class="form-control", accept=".xlsx") }}
                         {% for error in form.file.errors %}
                         <div class="text-danger small">{{ error }}</div>
                         {% endfor %}

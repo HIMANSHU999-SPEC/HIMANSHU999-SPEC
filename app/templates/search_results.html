@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Search Results - Stock Check System{% endblock %}
+{% block title %}Search Results - IT Stock Manager{% endblock %}
 
 {% block content %}
 <h3><i class="bi bi-search"></i> Search Results</h3>
@@ -12,16 +12,19 @@
 
 {% if results %}
 <div class="table-responsive">
-    <table class="table table-striped table-hover table-bordered">
+    <table class="table table-striped table-hover table-bordered table-sm">
         <thead class="table-primary">
             <tr>
                 <th>#</th>
+                <th>Asset Tag</th>
                 <th>Item Name</th>
                 <th>Category</th>
+                <th>Manufacturer / Model</th>
                 <th>Campus</th>
                 <th>Qty</th>
-                <th>Unit Price</th>
+                <th>Status</th>
                 <th>Condition</th>
+                <th>Assigned To</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -29,22 +32,33 @@
             {% for stock in results %}
             <tr class="{{ 'table-danger' if stock.is_low_stock else '' }}">
                 <td>{{ loop.index }}</td>
+                <td><small class="text-muted">{{ stock.asset_tag or '-' }}</small></td>
                 <td>
                     {{ stock.item_name }}
                     {% if stock.is_low_stock %}<i class="bi bi-exclamation-triangle text-danger" title="Low Stock"></i>{% endif %}
                 </td>
                 <td>{{ stock.category or '-' }}</td>
+                <td><small>{{ stock.manufacturer or '' }} {{ stock.model or '' }}</small></td>
                 <td>
                     <a href="{{ url_for('stock.campus_stocks', campus_id=stock.campus_id) }}">
                         {{ stock.campus.name if stock.campus else 'N/A' }}
                     </a>
                 </td>
                 <td>{{ stock.quantity }}</td>
-                <td>{{ "%.2f" | format(stock.unit_price or 0) }}</td>
+                <td>
+                    {% if stock.status == 'Active' %}<span class="badge bg-success">Active</span>
+                    {% elif stock.status == 'In Storage' %}<span class="badge bg-info">In Storage</span>
+                    {% elif stock.status == 'Under Repair' %}<span class="badge bg-warning text-dark">Under Repair</span>
+                    {% else %}<span class="badge bg-secondary">{{ stock.status or '-' }}</span>{% endif %}
+                </td>
                 <td>
                     {% if stock.condition == 'Good' %}<span class="badge bg-success">{{ stock.condition }}</span>
                     {% elif stock.condition == 'Damaged' %}<span class="badge bg-danger">{{ stock.condition }}</span>
                     {% else %}<span class="badge bg-warning text-dark">{{ stock.condition }}</span>{% endif %}
+                </td>
+                <td>
+                    {% if stock.assigned_user %}<small><i class="bi bi-person-fill"></i> {{ stock.assigned_user.username }}</small>
+                    {% else %}<small class="text-muted">-</small>{% endif %}
                 </td>
                 <td>
                     <a href="{{ url_for('stock.edit_stock', stock_id=stock.id) }}" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>

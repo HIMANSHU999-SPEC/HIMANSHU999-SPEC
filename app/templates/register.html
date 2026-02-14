@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Register User - Stock Check System{% endblock %}
+{% block title %}Register User - IT Stock Manager{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -13,37 +13,48 @@
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
-                        <label class="form-label">Username</label>
+                        <label class="form-label">Username *</label>
                         {{ form.username(class="form-control", placeholder="Enter username") }}
                         {% for error in form.username.errors %}
                         <div class="text-danger small">{{ error }}</div>
                         {% endfor %}
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        {{ form.password(class="form-control", placeholder="Enter password (min 6 chars)") }}
-                        {% for error in form.password.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                        {% endfor %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Password *</label>
+                            {{ form.password(class="form-control", placeholder="Min 6 characters") }}
+                            {% for error in form.password.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Confirm Password *</label>
+                            {{ form.confirm_password(class="form-control", placeholder="Repeat password") }}
+                            {% for error in form.confirm_password.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Confirm Password</label>
-                        {{ form.confirm_password(class="form-control", placeholder="Re-enter password") }}
-                        {% for error in form.confirm_password.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Role</label>
-                        {{ form.role(class="form-select") }}
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Role *</label>
+                            {{ form.role(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Department</label>
+                            {{ form.department(class="form-control", placeholder="e.g. IT, HR") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Email</label>
+                            {{ form.email(class="form-control", placeholder="user@example.com") }}
+                        </div>
                     </div>
 
                     <div class="d-grid gap-2">
                         {{ form.submit(class="btn btn-primary") }}
-                        <a href="{{ url_for('stock.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+                        <a href="{{ url_for('stock.manage_users') }}" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
             </div>

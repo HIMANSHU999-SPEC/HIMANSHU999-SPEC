@@ -11,7 +11,13 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='staff')  # admin / staff
+    department = db.Column(db.String(100), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Assets assigned to this user
+    assigned_assets = db.relationship('Stock', backref='assigned_user', lazy=True,
+                                      foreign_keys='Stock.assigned_to')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
@@ -59,10 +65,30 @@ class Stock(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # --- Microsoft Lists IT Asset Management fields ---
+    asset_tag = db.Column(db.String(100), nullable=True, unique=True)
+    serial_number = db.Column(db.String(200), nullable=True)
+    manufacturer = db.Column(db.String(150), nullable=True)
+    model = db.Column(db.String(150), nullable=True)
+    purchase_date = db.Column(db.Date, nullable=True)
+    warranty_expiry = db.Column(db.Date, nullable=True)
+    department = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(50), nullable=True, default='Active')
+    # Active / In Storage / Retired / Under Repair / Lost-Stolen / Disposed
+
+    # Staff assignment
+    assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     @property
     def is_low_stock(self):
         threshold = self.low_stock_threshold if self.low_stock_threshold is not None else 10
         return (self.quantity or 0) <= threshold
+
+    @property
+    def is_warranty_expired(self):
+        if self.warranty_expiry:
+            return self.warranty_expiry < datetime.utcnow().date()
+        return False
 
     def __repr__(self):
         return f'<Stock {self.item_name} @ {self.campus.name if self.campus else "N/A"}>'
@@ -76,7 +102,7 @@ class StockHistory(db.Model):
     stock_id = db.Column(db.Integer, nullable=True)
     item_name = db.Column(db.String(200), nullable=False)
     campus_name = db.Column(db.String(120), nullable=True)
-    action = db.Column(db.String(50), nullable=False)  # created, updated, deleted, transferred_out, transferred_in
+    action = db.Column(db.String(50), nullable=False)  # created, updated, deleted, transferred_out, transferred_in, assigned, unassigned
     field_changed = db.Column(db.String(100), nullable=True)
     old_value = db.Column(db.String(500), nullable=True)
     new_value = db.Column(db.String(500), nullable=True)

@@ -12,7 +12,10 @@ from app.forms import UploadExcelForm
 
 excel_bp = Blueprint('excel', __name__)
 
-EXPECTED_COLUMNS = ['item_name', 'category', 'quantity', 'unit', 'unit_price', 'condition', 'remarks']
+EXPECTED_COLUMNS = [
+    'item_name', 'category', 'quantity', 'unit', 'unit_price', 'condition',
+    'status', 'asset_tag', 'serial_number', 'manufacturer', 'model', 'department', 'remarks'
+]
 
 
 @excel_bp.route('/upload', methods=['GET', 'POST'])
@@ -50,6 +53,16 @@ def upload_excel():
                     quantity = int(row.get('quantity', 0)) if pd.notna(row.get('quantity')) else 0
                     unit_price = float(row.get('unit_price', 0)) if pd.notna(row.get('unit_price')) else 0.0
 
+                    # Parse optional IT asset fields
+                    asset_tag = str(row.get('asset_tag', '')).strip() if pd.notna(row.get('asset_tag')) else None
+                    if asset_tag == '' or asset_tag == 'nan':
+                        asset_tag = None
+
+                    # Check for duplicate asset_tag
+                    if asset_tag and Stock.query.filter_by(asset_tag=asset_tag).first():
+                        errors.append(f"Row {row_num}: Asset tag '{asset_tag}' already exists, skipped.")
+                        continue
+
                     stock = Stock(
                         item_name=item_name,
                         category=str(row.get('category', '')).strip() if pd.notna(row.get('category')) else '',
@@ -58,6 +71,12 @@ def upload_excel():
                         unit_price=unit_price,
                         total_value=quantity * unit_price,
                         condition=str(row.get('condition', 'Good')).strip() if pd.notna(row.get('condition')) else 'Good',
+                        status=str(row.get('status', 'Active')).strip() if pd.notna(row.get('status')) else 'Active',
+                        asset_tag=asset_tag,
+                        serial_number=str(row.get('serial_number', '')).strip() if pd.notna(row.get('serial_number')) else None,
+                        manufacturer=str(row.get('manufacturer', '')).strip() if pd.notna(row.get('manufacturer')) else None,
+                        model=str(row.get('model', '')).strip() if pd.notna(row.get('model')) else None,
+                        department=str(row.get('department', '')).strip() if pd.notna(row.get('department')) else None,
                         remarks=str(row.get('remarks', '')).strip() if pd.notna(row.get('remarks')) else '',
                         campus_id=campus_id,
                         added_by=current_user.username,
@@ -92,7 +111,10 @@ def download_template():
     ws = wb.active
     ws.title = 'Stock Template'
 
-    headers = ['item_name', 'category', 'quantity', 'unit', 'unit_price', 'condition', 'remarks']
+    headers = [
+        'item_name', 'category', 'quantity', 'unit', 'unit_price', 'condition',
+        'status', 'asset_tag', 'serial_number', 'manufacturer', 'model', 'department', 'remarks'
+    ]
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
     header_font = Font(bold=True, color='FFFFFF', size=11)
     thin_border = Border(
@@ -108,7 +130,8 @@ def download_template():
         cell.border = thin_border
 
     # Sample row
-    sample = ['Laptop', 'Electronics', 10, 'pcs', 45000, 'Good', 'Dell Latitude']
+    sample = ['Dell Latitude 5540', 'Laptop', 10, 'pcs', 45000, 'Good',
+              'Active', 'IT-2024-0001', 'SN123456', 'Dell', 'Latitude 5540', 'IT', 'Company laptop']
     for col_idx, val in enumerate(sample, 1):
         cell = ws.cell(row=2, column=col_idx, value=val)
         cell.border = thin_border
@@ -145,13 +168,17 @@ def download_campus_stock(campus_id):
     ws.title = f'{campus.code} Stock'
 
     # Title row
-    ws.merge_cells('A1:H1')
+    ws.merge_cells('A1:P1')
     title_cell = ws.cell(row=1, column=1, value=f'Stock Report - {campus.name} ({campus.code})')
     title_cell.font = Font(bold=True, size=14, color='1F4E79')
     title_cell.alignment = Alignment(horizontal='center')
 
     # Header row
-    headers = ['S.No', 'Item Name', 'Category', 'Quantity', 'Unit', 'Unit Price', 'Total Value', 'Condition', 'Remarks']
+    headers = [
+        'S.No', 'Asset Tag', 'Item Name', 'Category', 'Manufacturer', 'Model',
+        'Serial Number', 'Quantity', 'Unit', 'Unit Price', 'Total Value',
+        'Status', 'Condition', 'Assigned To', 'Department', 'Remarks'
+    ]
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
     header_font = Font(bold=True, color='FFFFFF', size=11)
     thin_border = Border(
@@ -172,19 +199,24 @@ def download_campus_stock(campus_id):
         sno = row_idx - 3
         total_val = (stock.quantity or 0) * (stock.unit_price or 0)
         grand_total += total_val
+        assigned_name = stock.assigned_user.username if stock.assigned_user else ''
 
-        data = [sno, stock.item_name, stock.category, stock.quantity,
-                stock.unit, stock.unit_price, total_val, stock.condition, stock.remarks]
+        data = [
+            sno, stock.asset_tag, stock.item_name, stock.category,
+            stock.manufacturer, stock.model, stock.serial_number,
+            stock.quantity, stock.unit, stock.unit_price, total_val,
+            stock.status, stock.condition, assigned_name, stock.department, stock.remarks
+        ]
         for col_idx, val in enumerate(data, 1):
             cell = ws.cell(row=row_idx, column=col_idx, value=val)
             cell.border = thin_border
-            if col_idx in (6, 7):  # price columns
+            if col_idx in (10, 11):  # price columns
                 cell.number_format = '#,##0.00'
 
     # Grand total row
     total_row = len(stocks) + 4
-    ws.cell(row=total_row, column=6, value='Grand Total:').font = Font(bold=True)
-    total_cell = ws.cell(row=total_row, column=7, value=grand_total)
+    ws.cell(row=total_row, column=10, value='Grand Total:').font = Font(bold=True)
+    total_cell = ws.cell(row=total_row, column=11, value=grand_total)
     total_cell.font = Font(bold=True, size=12)
     total_cell.number_format = '#,##0.00'
 
@@ -222,14 +254,18 @@ def download_all_stock():
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
     )
-    headers = ['S.No', 'Item Name', 'Category', 'Quantity', 'Unit', 'Unit Price', 'Total Value', 'Condition', 'Remarks']
+    headers = [
+        'S.No', 'Asset Tag', 'Item Name', 'Category', 'Manufacturer', 'Model',
+        'Serial Number', 'Quantity', 'Unit', 'Unit Price', 'Total Value',
+        'Status', 'Condition', 'Assigned To', 'Department', 'Remarks'
+    ]
 
     for campus in campuses:
         ws = wb.create_sheet(title=campus.code[:31])  # sheet name max 31 chars
         stocks = Stock.query.filter_by(campus_id=campus.id).order_by(Stock.category, Stock.item_name).all()
 
         # Title
-        ws.merge_cells('A1:I1')
+        ws.merge_cells('A1:P1')
         title_cell = ws.cell(row=1, column=1, value=f'Stock Report - {campus.name} ({campus.code})')
         title_cell.font = Font(bold=True, size=14, color='1F4E79')
         title_cell.alignment = Alignment(horizontal='center')
@@ -247,17 +283,22 @@ def download_all_stock():
         for row_idx, stock in enumerate(stocks, 4):
             total_val = (stock.quantity or 0) * (stock.unit_price or 0)
             grand_total += total_val
-            data = [row_idx - 3, stock.item_name, stock.category, stock.quantity,
-                    stock.unit, stock.unit_price, total_val, stock.condition, stock.remarks]
+            assigned_name = stock.assigned_user.username if stock.assigned_user else ''
+            data = [
+                row_idx - 3, stock.asset_tag, stock.item_name, stock.category,
+                stock.manufacturer, stock.model, stock.serial_number,
+                stock.quantity, stock.unit, stock.unit_price, total_val,
+                stock.status, stock.condition, assigned_name, stock.department, stock.remarks
+            ]
             for col_idx, val in enumerate(data, 1):
                 cell = ws.cell(row=row_idx, column=col_idx, value=val)
                 cell.border = thin_border
-                if col_idx in (6, 7):
+                if col_idx in (10, 11):
                     cell.number_format = '#,##0.00'
 
         total_row = len(stocks) + 4
-        ws.cell(row=total_row, column=6, value='Grand Total:').font = Font(bold=True)
-        total_cell = ws.cell(row=total_row, column=7, value=grand_total)
+        ws.cell(row=total_row, column=10, value='Grand Total:').font = Font(bold=True)
+        total_cell = ws.cell(row=total_row, column=11, value=grand_total)
         total_cell.font = Font(bold=True, size=12)
         total_cell.number_format = '#,##0.00'
 

@@ -1,3 +1,4 @@
+from urllib.parse import urlparse
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
@@ -26,6 +27,10 @@ def login():
             login_user(user)
             flash('Logged in successfully!', 'success')
             next_page = request.args.get('next')
+            if next_page:
+                parsed = urlparse(next_page)
+                if parsed.netloc or parsed.scheme:
+                    next_page = None
             return redirect(next_page or url_for('stock.dashboard'))
         flash('Invalid username or password.', 'danger')
 
@@ -44,12 +49,17 @@ def register():
         if User.query.filter_by(username=form.username.data).first():
             flash('Username already exists.', 'danger')
         else:
-            user = User(username=form.username.data, role=form.role.data)
+            user = User(
+                username=form.username.data,
+                role=form.role.data,
+                department=form.department.data,
+                email=form.email.data,
+            )
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
             flash(f'User "{form.username.data}" created successfully!', 'success')
-            return redirect(url_for('stock.dashboard'))
+            return redirect(url_for('stock.manage_users'))
 
     return render_template('register.html', form=form)
 

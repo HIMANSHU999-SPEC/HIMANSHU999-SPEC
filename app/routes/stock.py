@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from app import db
-from app.models import Stock, Campus, StockHistory, StockTransfer
+from app.models import Stock, Campus, StockHistory, StockTransfer, User
 from app.forms import StockForm, CampusForm, StockTransferForm
 
 stock_bp = Blueprint('stock', __name__)
@@ -28,6 +28,13 @@ def log_stock_action(stock, action, changed_by, field_changed=None, old_value=No
     db.session.add(entry)
 
 
+def _populate_stock_form_choices(form):
+    """Populate dynamic select fields for StockForm."""
+    form.campus_id.choices = [(c.id, f"{c.name} ({c.code})") for c in Campus.query.order_by(Campus.name).all()]
+    users = User.query.order_by(User.username).all()
+    form.assigned_to.choices = [(0, '-- Unassigned --')] + [(u.id, f"{u.username} ({u.department or u.role})") for u in users]
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
@@ -43,6 +50,7 @@ def dashboard():
     category_data = {}
     campus_labels = []
     campus_values = []
+    status_data = {}
 
     for campus in campuses:
         stocks = Stock.query.filter_by(campus_id=campus.id).all()
@@ -58,6 +66,8 @@ def dashboard():
         for s in stocks:
             cat = s.category or 'Uncategorized'
             category_data[cat] = category_data.get(cat, 0) + (s.quantity or 0)
+            st = s.status or 'Active'
+            status_data[st] = status_data.get(st, 0) + 1
 
         campus_stats.append({
             'campus': campus,
@@ -74,6 +84,16 @@ def dashboard():
         StockHistory.timestamp.desc()
     ).limit(10).all()
 
+    # Warranty expiring soon (within 30 days)
+    from datetime import timedelta, date
+    today = date.today()
+    soon = today + timedelta(days=30)
+    warranty_expiring = Stock.query.filter(
+        Stock.warranty_expiry != None,
+        Stock.warranty_expiry <= soon,
+        Stock.warranty_expiry >= today,
+    ).order_by(Stock.warranty_expiry.asc()).limit(10).all()
+
     return render_template('dashboard.html',
                            campus_stats=campus_stats,
                            total_items=total_items,
@@ -84,7 +104,10 @@ def dashboard():
                            category_labels=list(category_data.keys()),
                            category_values=list(category_data.values()),
                            campus_labels=campus_labels,
-                           campus_values=campus_values)
+                           campus_values=campus_values,
+                           status_labels=list(status_data.keys()),
+                           status_values=list(status_data.values()),
+                           warranty_expiring=warranty_expiring)
 
 
 # ---------------------------------------------------------------------------
@@ -115,10 +138,17 @@ def charts_api():
     condition_labels = [r[0] or 'Unknown' for r in cond_rows]
     condition_values = [int(r[1] or 0) for r in cond_rows]
 
+    status_rows = db.session.query(
+        Stock.status, func.count(Stock.id)
+    ).group_by(Stock.status).all()
+    status_labels = [r[0] or 'Unknown' for r in status_rows]
+    status_values = [int(r[1] or 0) for r in status_rows]
+
     return jsonify({
         'category': {'labels': category_labels, 'values': category_values},
         'campus': {'labels': campus_labels, 'values': campus_values},
         'condition': {'labels': condition_labels, 'values': condition_values},
+        'status': {'labels': status_labels, 'values': status_values},
     })
 
 
@@ -135,12 +165,15 @@ def add_campus():
 
     form = CampusForm()
     if form.validate_on_submit():
-        if Campus.query.filter_by(code=form.code.data).first():
+        normalized_code = form.code.data.strip().upper()
+        if Campus.query.filter(db.func.upper(Campus.code) == normalized_code).first():
             flash('Campus code already exists.', 'danger')
+        elif Campus.query.filter(db.func.lower(Campus.name) == form.name.data.strip().lower()).first():
+            flash('Campus name already exists.', 'danger')
         else:
             campus = Campus(
-                name=form.name.data,
-                code=form.code.data.upper(),
+                name=form.name.data.strip(),
+                code=normalized_code,
                 address=form.address.data,
             )
             db.session.add(campus)
@@ -165,12 +198,24 @@ def edit_campus(campus_id):
 
     form = CampusForm(obj=campus)
     if form.validate_on_submit():
-        campus.name = form.name.data
-        campus.code = form.code.data.upper()
-        campus.address = form.address.data
-        db.session.commit()
-        flash(f'Campus "{campus.name}" updated.', 'success')
-        return redirect(url_for('stock.dashboard'))
+        normalized_code = form.code.data.strip().upper()
+        dup_code = Campus.query.filter(
+            db.func.upper(Campus.code) == normalized_code, Campus.id != campus.id
+        ).first()
+        dup_name = Campus.query.filter(
+            db.func.lower(Campus.name) == form.name.data.strip().lower(), Campus.id != campus.id
+        ).first()
+        if dup_code:
+            flash('Another campus with this code already exists.', 'danger')
+        elif dup_name:
+            flash('Another campus with this name already exists.', 'danger')
+        else:
+            campus.name = form.name.data.strip()
+            campus.code = normalized_code
+            campus.address = form.address.data
+            db.session.commit()
+            flash(f'Campus "{campus.name}" updated.', 'success')
+            return redirect(url_for('stock.dashboard'))
 
     return render_template('campus_form.html', form=form, title='Edit Campus')
 
@@ -204,12 +249,24 @@ def campus_stocks(campus_id):
 
     search = request.args.get('search', '').strip()
     category_filter = request.args.get('category', '').strip()
+    status_filter = request.args.get('status', '').strip()
+    assigned_filter = request.args.get('assigned', '').strip()
 
     query = Stock.query.filter_by(campus_id=campus_id)
     if search:
-        query = query.filter(Stock.item_name.ilike(f'%{search}%'))
+        query = query.filter(
+            Stock.item_name.ilike(f'%{search}%') |
+            Stock.asset_tag.ilike(f'%{search}%') |
+            Stock.serial_number.ilike(f'%{search}%')
+        )
     if category_filter:
         query = query.filter(Stock.category == category_filter)
+    if status_filter:
+        query = query.filter(Stock.status == status_filter)
+    if assigned_filter == 'unassigned':
+        query = query.filter(Stock.assigned_to == None)
+    elif assigned_filter == 'assigned':
+        query = query.filter(Stock.assigned_to != None)
 
     stocks = query.order_by(Stock.category, Stock.item_name).all()
 
@@ -218,7 +275,10 @@ def campus_stocks(campus_id):
     categories = [c[0] for c in categories if c[0]]
 
     return render_template('campus_stocks.html', campus=campus, stocks=stocks,
-                           categories=categories, search=search, category_filter=category_filter)
+                           categories=categories, search=search,
+                           category_filter=category_filter,
+                           status_filter=status_filter,
+                           assigned_filter=assigned_filter)
 
 
 # ---------------------------------------------------------------------------
@@ -229,19 +289,37 @@ def campus_stocks(campus_id):
 @login_required
 def add_stock():
     form = StockForm()
-    form.campus_id.choices = [(c.id, f"{c.name} ({c.code})") for c in Campus.query.order_by(Campus.name).all()]
+    _populate_stock_form_choices(form)
 
     if form.validate_on_submit():
         quantity = form.quantity.data or 0
         unit_price = form.unit_price.data or 0.0
+        assigned_user_id = form.assigned_to.data if form.assigned_to.data and form.assigned_to.data != 0 else None
+
+        # Validate unique asset_tag
+        if form.asset_tag.data and form.asset_tag.data.strip():
+            existing = Stock.query.filter_by(asset_tag=form.asset_tag.data.strip()).first()
+            if existing:
+                flash(f'Asset tag "{form.asset_tag.data}" already exists.', 'danger')
+                return render_template('stock_form.html', form=form, title='Add Stock Item')
+
         stock = Stock(
             item_name=form.item_name.data,
-            category=form.category.data,
+            category=form.category.data or None,
             quantity=quantity,
             unit=form.unit.data,
             unit_price=unit_price,
             total_value=quantity * unit_price,
             condition=form.condition.data,
+            status=form.status.data or 'Active',
+            asset_tag=form.asset_tag.data.strip() if form.asset_tag.data else None,
+            serial_number=form.serial_number.data,
+            manufacturer=form.manufacturer.data,
+            model=form.model.data,
+            purchase_date=form.purchase_date.data,
+            warranty_expiry=form.warranty_expiry.data,
+            department=form.department.data,
+            assigned_to=assigned_user_id,
             low_stock_threshold=form.low_stock_threshold.data if form.low_stock_threshold.data is not None else 10,
             campus_id=form.campus_id.data,
             remarks=form.remarks.data,
@@ -250,6 +328,10 @@ def add_stock():
         db.session.add(stock)
         db.session.flush()
         log_stock_action(stock, 'created', current_user.username)
+        if assigned_user_id:
+            user = db.session.get(User, assigned_user_id)
+            log_stock_action(stock, 'assigned', current_user.username,
+                             'assigned_to', None, user.username if user else str(assigned_user_id))
         db.session.commit()
         flash(f'Stock item "{stock.item_name}" added.', 'success')
         return redirect(url_for('stock.campus_stocks', campus_id=stock.campus_id))
@@ -266,13 +348,17 @@ def edit_stock(stock_id):
         return redirect(url_for('stock.dashboard'))
 
     form = StockForm(obj=stock)
-    form.campus_id.choices = [(c.id, f"{c.name} ({c.code})") for c in Campus.query.order_by(Campus.name).all()]
+    _populate_stock_form_choices(form)
+
+    # Pre-fill assigned_to (WTForms coercion: 0 = unassigned)
+    if request.method == 'GET' and not stock.assigned_to:
+        form.assigned_to.data = 0
 
     if form.validate_on_submit():
         changes = []
         if stock.item_name != form.item_name.data:
             changes.append(('item_name', stock.item_name, form.item_name.data))
-        if stock.category != form.category.data:
+        if stock.category != (form.category.data or None):
             changes.append(('category', stock.category, form.category.data))
         if stock.quantity != (form.quantity.data or 0):
             changes.append(('quantity', stock.quantity, form.quantity.data or 0))
@@ -280,19 +366,56 @@ def edit_stock(stock_id):
             changes.append(('unit_price', stock.unit_price, form.unit_price.data or 0.0))
         if stock.condition != form.condition.data:
             changes.append(('condition', stock.condition, form.condition.data))
+        if stock.status != form.status.data:
+            changes.append(('status', stock.status, form.status.data))
         if stock.campus_id != form.campus_id.data:
             old_campus = db.session.get(Campus, stock.campus_id)
             new_campus = db.session.get(Campus, form.campus_id.data)
             changes.append(('campus', old_campus.name if old_campus else str(stock.campus_id),
                             new_campus.name if new_campus else str(form.campus_id.data)))
+        if stock.asset_tag != (form.asset_tag.data.strip() if form.asset_tag.data else None):
+            changes.append(('asset_tag', stock.asset_tag, form.asset_tag.data))
+        if stock.serial_number != form.serial_number.data:
+            changes.append(('serial_number', stock.serial_number, form.serial_number.data))
+        if stock.manufacturer != form.manufacturer.data:
+            changes.append(('manufacturer', stock.manufacturer, form.manufacturer.data))
+        if stock.model != form.model.data:
+            changes.append(('model', stock.model, form.model.data))
+
+        # Check assignment changes
+        new_assigned = form.assigned_to.data if form.assigned_to.data and form.assigned_to.data != 0 else None
+        old_assigned = stock.assigned_to
+        if old_assigned != new_assigned:
+            old_user = db.session.get(User, old_assigned) if old_assigned else None
+            new_user = db.session.get(User, new_assigned) if new_assigned else None
+            changes.append(('assigned_to',
+                            old_user.username if old_user else 'Unassigned',
+                            new_user.username if new_user else 'Unassigned'))
+
+        # Validate unique asset_tag (excluding current)
+        tag = form.asset_tag.data.strip() if form.asset_tag.data else None
+        if tag:
+            existing = Stock.query.filter(Stock.asset_tag == tag, Stock.id != stock.id).first()
+            if existing:
+                flash(f'Asset tag "{tag}" already in use by another item.', 'danger')
+                return render_template('stock_form.html', form=form, title='Edit Stock Item')
 
         stock.item_name = form.item_name.data
-        stock.category = form.category.data
+        stock.category = form.category.data or None
         stock.quantity = form.quantity.data or 0
         stock.unit = form.unit.data
         stock.unit_price = form.unit_price.data or 0.0
         stock.total_value = stock.quantity * stock.unit_price
         stock.condition = form.condition.data
+        stock.status = form.status.data or 'Active'
+        stock.asset_tag = tag
+        stock.serial_number = form.serial_number.data
+        stock.manufacturer = form.manufacturer.data
+        stock.model = form.model.data
+        stock.purchase_date = form.purchase_date.data
+        stock.warranty_expiry = form.warranty_expiry.data
+        stock.department = form.department.data
+        stock.assigned_to = new_assigned
         stock.low_stock_threshold = form.low_stock_threshold.data if form.low_stock_threshold.data is not None else 10
         stock.campus_id = form.campus_id.data
         stock.remarks = form.remarks.data
@@ -325,6 +448,72 @@ def delete_stock(stock_id):
 
 
 # ---------------------------------------------------------------------------
+# My Assets (staff view)
+# ---------------------------------------------------------------------------
+
+@stock_bp.route('/my-assets')
+@login_required
+def my_assets():
+    assets = Stock.query.filter_by(assigned_to=current_user.id)\
+        .order_by(Stock.category, Stock.item_name).all()
+    return render_template('my_assets.html', assets=assets)
+
+
+# ---------------------------------------------------------------------------
+# User Management (admin)
+# ---------------------------------------------------------------------------
+
+@stock_bp.route('/users')
+@login_required
+def manage_users():
+    if not current_user.is_admin():
+        flash('Only admins can manage users.', 'danger')
+        return redirect(url_for('stock.dashboard'))
+
+    users = User.query.order_by(User.username).all()
+    return render_template('manage_users.html', users=users)
+
+
+@stock_bp.route('/user/<int:user_id>/assets')
+@login_required
+def user_assets(user_id):
+    if not current_user.is_admin():
+        flash('Only admins can view user assets.', 'danger')
+        return redirect(url_for('stock.dashboard'))
+
+    user = db.session.get(User, user_id)
+    if not user:
+        flash('User not found.', 'danger')
+        return redirect(url_for('stock.manage_users'))
+
+    assets = Stock.query.filter_by(assigned_to=user_id)\
+        .order_by(Stock.category, Stock.item_name).all()
+    return render_template('user_assets.html', target_user=user, assets=assets)
+
+
+@stock_bp.route('/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin():
+        flash('Only admins can delete users.', 'danger')
+        return redirect(url_for('stock.dashboard'))
+
+    user = db.session.get(User, user_id)
+    if not user:
+        flash('User not found.', 'danger')
+    elif user.id == current_user.id:
+        flash('You cannot delete your own account.', 'danger')
+    else:
+        # Unassign all assets before deleting the user
+        Stock.query.filter_by(assigned_to=user.id).update({'assigned_to': None})
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'User "{user.username}" deleted.', 'success')
+
+    return redirect(url_for('stock.manage_users'))
+
+
+# ---------------------------------------------------------------------------
 # Global Quick Search
 # ---------------------------------------------------------------------------
 
@@ -337,7 +526,11 @@ def global_search():
         results = Stock.query.filter(
             Stock.item_name.ilike(f'%{q}%') |
             Stock.category.ilike(f'%{q}%') |
-            Stock.remarks.ilike(f'%{q}%')
+            Stock.remarks.ilike(f'%{q}%') |
+            Stock.asset_tag.ilike(f'%{q}%') |
+            Stock.serial_number.ilike(f'%{q}%') |
+            Stock.manufacturer.ilike(f'%{q}%') |
+            Stock.model.ilike(f'%{q}%')
         ).order_by(Stock.item_name).all()
     return render_template('search_results.html', query=q, results=results)
 
@@ -386,9 +579,10 @@ def transfer_stock(campus_id):
                     item_name=stock.item_name, category=stock.category, quantity=qty,
                     unit=stock.unit, unit_price=stock.unit_price,
                     total_value=qty * (stock.unit_price or 0), condition=stock.condition,
-                    low_stock_threshold=stock.low_stock_threshold,
+                    status=stock.status, low_stock_threshold=stock.low_stock_threshold,
                     campus_id=to_campus.id, remarks=f'Transferred from {campus.name}',
                     added_by=current_user.username,
+                    manufacturer=stock.manufacturer, model=stock.model,
                 )
                 db.session.add(dest_stock)
 
@@ -476,17 +670,22 @@ def _build_pdf_section(campus, stocks):
         tv = (s.quantity or 0) * (s.unit_price or 0)
         grand_total += tv
         low_flag = ' style="background:#ffe0e0;"' if s.is_low_stock else ''
-        rows += (f'<tr{low_flag}><td>{i}</td><td>{s.item_name}</td>'
-                 f'<td>{s.category or "-"}</td><td>{s.quantity}</td><td>{s.unit or "-"}</td>'
+        assigned_name = s.assigned_user.username if s.assigned_user else '-'
+        rows += (f'<tr{low_flag}><td>{i}</td><td>{s.asset_tag or "-"}</td><td>{s.item_name}</td>'
+                 f'<td>{s.category or "-"}</td><td>{s.manufacturer or "-"}</td><td>{s.model or "-"}</td>'
+                 f'<td>{s.serial_number or "-"}</td><td>{s.quantity}</td><td>{s.unit or "-"}</td>'
                  f'<td>{s.unit_price or 0:.2f}</td><td>{tv:.2f}</td>'
-                 f'<td>{s.condition}</td><td>{s.remarks or "-"}</td></tr>')
+                 f'<td>{s.status or "-"}</td><td>{s.condition}</td>'
+                 f'<td>{assigned_name}</td><td>{s.remarks or "-"}</td></tr>')
     return (f'<h2>{campus.name} ({campus.code})</h2>'
             f'<p>Address: {campus.address or "N/A"} | Items: {len(stocks)} | Generated: {now}</p>'
-            f'<table><thead><tr><th>#</th><th>Item</th><th>Category</th><th>Qty</th><th>Unit</th>'
-            f'<th>Price</th><th>Total</th><th>Condition</th><th>Remarks</th></tr></thead>'
+            f'<table><thead><tr><th>#</th><th>Asset Tag</th><th>Item</th><th>Category</th>'
+            f'<th>Manufacturer</th><th>Model</th><th>Serial #</th><th>Qty</th><th>Unit</th>'
+            f'<th>Price</th><th>Total</th><th>Status</th><th>Condition</th>'
+            f'<th>Assigned To</th><th>Remarks</th></tr></thead>'
             f'<tbody>{rows}</tbody>'
-            f'<tfoot><tr><td colspan="6" style="text-align:right;font-weight:bold;">Grand Total:</td>'
-            f'<td style="font-weight:bold;">{grand_total:.2f}</td><td colspan="2"></td></tr></tfoot></table>')
+            f'<tfoot><tr><td colspan="10" style="text-align:right;font-weight:bold;">Grand Total:</td>'
+            f'<td style="font-weight:bold;">{grand_total:.2f}</td><td colspan="4"></td></tr></tfoot></table>')
 
 
 def _wrap_pdf_html(title, body):
@@ -497,8 +696,8 @@ def _wrap_pdf_html(title, body):
 body {{ font-family: Arial, sans-serif; margin: 20px; color: #333; }}
 h1 {{ color: #1a5276; border-bottom: 2px solid #1a5276; padding-bottom: 8px; }}
 h2 {{ color: #2e86c1; margin-top: 30px; }}
-table {{ width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 13px; }}
-th, td {{ border: 1px solid #ccc; padding: 6px 10px; text-align: left; }}
+table {{ width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11px; }}
+th, td {{ border: 1px solid #ccc; padding: 4px 6px; text-align: left; }}
 th {{ background: #2e86c1; color: #fff; }}
 tr:nth-child(even) {{ background: #f2f2f2; }}
 .print-btn {{ background: #2e86c1; color: #fff; border: none; padding: 10px 25px;
