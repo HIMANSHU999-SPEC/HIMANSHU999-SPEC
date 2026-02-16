@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - IT Stock Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="bi bi-box-seam"></i> {{ title }}</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <!-- Asset Identification -->
+                    <h6 class="text-muted border-bottom pb-2 mb-3"><i class="bi bi-tag"></i> Asset Identification</h6>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Item Name *</label>
+                            {{ form.item_name(class="form-control", placeholder="e.g. Dell Latitude 5540") }}
+                            {% for error in form.item_name.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Asset Tag</label>
+                            {{ form.asset_tag(class="form-control", placeholder="e.g. IT-2024-0001") }}
+                            {% for error in form.asset_tag.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Serial Number</label>
+                            {{ form.serial_number(class="form-control", placeholder="Manufacturer S/N") }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Category</label>
+                            {{ form.category(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Manufacturer</label>
+                            {{ form.manufacturer(class="form-control", placeholder="e.g. Dell, HP, Apple") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Model</label>
+                            {{ form.model(class="form-control", placeholder="e.g. Latitude 5540") }}
+                        </div>
+                    </div>
+
+                    <!-- Quantity & Pricing -->
+                    <h6 class="text-muted border-bottom pb-2 mb-3 mt-2"><i class="bi bi-currency-dollar"></i> Quantity & Pricing</h6>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Quantity *</label>
+                            {{ form.quantity(class="form-control", placeholder="0") }}
+                            {% for error in form.quantity.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Unit</label>
+                            {{ form.unit(class="form-control", placeholder="pcs/kg/litre") }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Unit Price</label>
+                            {{ form.unit_price(class="form-control", placeholder="0.00") }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Low Stock Threshold</label>
+                            {{ form.low_stock_threshold(class="form-control", placeholder="10") }}
+                            <small class="text-muted">Alert when qty falls to or below</small>
+                        </div>
+                    </div>
+
+                    <!-- Status & Condition -->
+                    <h6 class="text-muted border-bottom pb-2 mb-3 mt-2"><i class="bi bi-clipboard-check"></i> Status & Condition</h6>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Status *</label>
+                            {{ form.status(class="form-select") }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Condition *</label>
+                            {{ form.condition(class="form-select") }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Purchase Date</label>
+                            {{ form.purchase_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Warranty Expiry</label>
+                            {{ form.warranty_expiry(class="form-control", type="date") }}
+                        </div>
+                    </div>
+
+                    <!-- Assignment & Location -->
+                    <h6 class="text-muted border-bottom pb-2 mb-3 mt-2"><i class="bi bi-person-check"></i> Assignment & Location</h6>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Assigned To</label>
+                            {{ form.assigned_to(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Department</label>
+                            {{ form.department(class="form-control", placeholder="e.g. IT, HR, Finance") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Campus *</label>
+                            {{ form.campus_id(class="form-select") }}
+                            {% for error in form.campus_id.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        {{ form.remarks(class="form-control", rows=2, placeholder="Any additional notes...") }}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('stock.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

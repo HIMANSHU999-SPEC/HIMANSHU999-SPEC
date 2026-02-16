@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - IT Stock Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <div>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('stock.add_campus') }}" class="btn btn-outline-primary"><i class="bi bi-building-add"></i> Add Campus</a>
+        {% endif %}
+        <a href="{{ url_for('stock.add_stock') }}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Add Asset</a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary shadow">
+            <div class="card-body text-center">
+                <h6 class="card-title">Total Campuses</h6>
+                <h2>{{ campus_stats | length }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success shadow">
+            <div class="card-body text-center">
+                <h6 class="card-title">Total Assets</h6>
+                <h2>{{ total_items }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info shadow">
+            <div class="card-body text-center">
+                <h6 class="card-title">Total Value</h6>
+                <h2>{{ "%.2f" | format(total_value) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white {{ 'bg-danger' if low_stock_count > 0 else 'bg-secondary' }} shadow">
+            <div class="card-body text-center">
+                <h6 class="card-title">Low Stock Alerts</h6>
+                <h2>{{ low_stock_count }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Warranty Expiring Soon -->
+{% if warranty_expiring %}
+<div class="card border-warning mb-4">
+    <div class="card-header bg-warning text-dark">
+        <i class="bi bi-shield-exclamation"></i> Warranty Expiring Soon (30 days)
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>Item</th><th>Asset Tag</th><th>Campus</th><th>Warranty Expiry</th><th>Assigned To</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in warranty_expiring %}
+                    <tr>
+                        <td>{{ item.item_name }}</td>
+                        <td><small>{{ item.asset_tag or '-' }}</small></td>
+                        <td>{{ item.campus.name if item.campus else 'N/A' }}</td>
+                        <td><span class="badge bg-warning text-dark">{{ item.warranty_expiry }}</span></td>
+                        <td>{{ item.assigned_user.username if item.assigned_user else '-' }}</td>
+                        <td><a href="{{ url_for('stock.edit_stock', stock_id=item.id) }}" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Low Stock Alerts Widget -->
+{% if low_stock_items %}
+<div class="card border-danger mb-4">
+    <div class="card-header bg-danger text-white">
+        <i class="bi bi-exclamation-triangle"></i> Low Stock Alerts
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>Item</th><th>Campus</th><th>Qty</th><th>Threshold</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in low_stock_items %}
+                    <tr>
+                        <td>{{ item.item_name }}</td>
+                        <td>{{ item.campus.name if item.campus else 'N/A' }}</td>
+                        <td><span class="badge bg-danger">{{ item.quantity }}</span></td>
+                        <td>{{ item.low_stock_threshold }}</td>
+                        <td><a href="{{ url_for('stock.edit_stock', stock_id=item.id) }}" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><i class="bi bi-pie-chart"></i> Assets by Category</div>
+            <div class="card-body">
+                <canvas id="categoryChart" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><i class="bi bi-bar-chart"></i> Value by Campus</div>
+            <div class="card-body">
+                <canvas id="campusChart" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><i class="bi bi-pie-chart-fill"></i> Assets by Status</div>
+            <div class="card-body">
+                <canvas id="statusChart" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Campus Cards -->
+{% if campus_stats %}
+<h4 class="mb-3">Campus-wise Overview</h4>
+<div class="row">
+    {% for stat in campus_stats %}
+    <div class="col-md-6 col-lg-4 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-building"></i> {{ stat.campus.name }}</strong>
+                <span class="badge bg-secondary">{{ stat.campus.code }}</span>
+            </div>
+            <div class="card-body">
+                <p class="mb-1">Assets: <strong>{{ stat.item_count }}</strong></p>
+                <p class="mb-1">Value: <strong>{{ "%.2f" | format(stat.total_value) }}</strong></p>
+                {% if stat.low_stock > 0 %}
+                <p class="mb-1 text-danger"><i class="bi bi-exclamation-triangle"></i> Low Stock: <strong>{{ stat.low_stock }}</strong></p>
+                {% endif %}
+                {% if stat.campus.address %}
+                <p class="mb-0 text-muted small"><i class="bi bi-geo-alt"></i> {{ stat.campus.address }}</p>
+                {% endif %}
+            </div>
+            <div class="card-footer bg-white">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="{{ url_for('stock.campus_stocks', campus_id=stat.campus.id) }}" class="btn btn-outline-primary">
+                        <i class="bi bi-eye"></i> View
+                    </a>
+                    <a href="{{ url_for('stock.transfer_stock', campus_id=stat.campus.id) }}" class="btn btn-outline-info">
+                        <i class="bi bi-arrow-left-right"></i> Transfer
+                    </a>
+                    <a href="{{ url_for('stock.download_pdf', campus_id=stat.campus.id) }}" class="btn btn-outline-danger">
+                        <i class="bi bi-file-pdf"></i> PDF
+                    </a>
+                    <a href="{{ url_for('excel.download_campus_stock', campus_id=stat.campus.id) }}" class="btn btn-outline-success">
+                        <i class="bi bi-download"></i> Excel
+                    </a>
+                    {% if current_user.is_admin() %}
+                    <a href="{{ url_for('stock.edit_campus', campus_id=stat.campus.id) }}" class="btn btn-outline-warning">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> No campuses found. {% if current_user.is_admin() %}
+    <a href="{{ url_for('stock.add_campus') }}">Add a campus</a> to get started.
+    {% else %}Ask an admin to add campuses.{% endif %}
+</div>
+{% endif %}
+
+<!-- Recent Activity -->
+{% if recent_activity %}
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history"></i> Recent Activity</span>
+        <a href="{{ url_for('stock.activity_log') }}" class="btn btn-sm btn-outline-primary">View All</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>Time</th><th>Action</th><th>Item</th><th>Campus</th><th>By</th><th>Details</th></tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_activity %}
+                    <tr>
+                        <td class="text-nowrap small">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            {% if log.action == 'created' %}<span class="badge bg-success">Created</span>
+                            {% elif log.action == 'updated' %}<span class="badge bg-warning text-dark">Updated</span>
+                            {% elif log.action == 'deleted' %}<span class="badge bg-danger">Deleted</span>
+                            {% elif log.action == 'assigned' %}<span class="badge bg-info">Assigned</span>
+                            {% elif log.action == 'unassigned' %}<span class="badge bg-secondary">Unassigned</span>
+                            {% elif 'transfer' in log.action %}<span class="badge bg-info">Transfer</span>
+                            {% else %}<span class="badge bg-secondary">{{ log.action }}</span>{% endif %}
+                        </td>
+                        <td>{{ log.item_name }}</td>
+                        <td>{{ log.campus_name or '-' }}</td>
+                        <td>{{ log.changed_by }}</td>
+                        <td class="small">
+                            {% if log.field_changed %}{{ log.field_changed }}: {{ log.old_value }} &rarr; {{ log.new_value }}{% else %}-{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var catLabels = {{ category_labels | tojson }};
+    var catValues = {{ category_values | tojson }};
+    var campLabels = {{ campus_labels | tojson }};
+    var campValues = {{ campus_values | tojson }};
+    var statusLabels = {{ status_labels | tojson }};
+    var statusValues = {{ status_values | tojson }};
+
+    var colors = ['#0d6efd','#198754','#dc3545','#ffc107','#0dcaf0','#6f42c1','#fd7e14','#20c997','#d63384','#6610f2'];
+
+    if (catLabels.length > 0) {
+        new Chart(document.getElementById('categoryChart'), {
+            type: 'pie',
+            data: {
+                labels: catLabels,
+                datasets: [{
+                    data: catValues,
+                    backgroundColor: colors.slice(0, catLabels.length)
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    if (campLabels.length > 0) {
+        new Chart(document.getElementById('campusChart'), {
+            type: 'bar',
+            data: {
+                labels: campLabels,
+                datasets: [{
+                    label: 'Stock Value',
+                    data: campValues,
+                    backgroundColor: '#0d6efd'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    if (statusLabels.length > 0) {
+        var statusColors = {
+            'Active': '#198754', 'In Storage': '#0dcaf0', 'Under Repair': '#ffc107',
+            'Retired': '#6c757d', 'Lost-Stolen': '#dc3545', 'Disposed': '#343a40'
+        };
+        var bgColors = statusLabels.map(function(l) { return statusColors[l] || '#6f42c1'; });
+        new Chart(document.getElementById('statusChart'), {
+            type: 'doughnut',
+            data: {
+                labels: statusLabels,
+                datasets: [{
+                    data: statusValues,
+                    backgroundColor: bgColors
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+})();
+</script>
+{% endblock %}

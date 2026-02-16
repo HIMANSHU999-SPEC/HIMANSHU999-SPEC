@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Transfer Stock - {{ campus.name }} - Stock Check System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h5><i class="bi bi-arrow-left-right"></i> Transfer Stock from {{ campus.name }} ({{ campus.code }})</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">Stock Item *</label>
+                        {{ form.stock_id(class="form-select") }}
+                        {% for error in form.stock_id.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Transfer To Campus *</label>
+                        {{ form.to_campus_id(class="form-select") }}
+                        {% for error in form.to_campus_id.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Quantity to Transfer *</label>
+                        {{ form.quantity(class="form-control", placeholder="Enter quantity") }}
+                        {% for error in form.quantity.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        {{ form.remarks(class="form-control", rows=2, placeholder="Reason for transfer...") }}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-info") }}
+                        <a href="{{ url_for('stock.campus_stocks', campus_id=campus.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

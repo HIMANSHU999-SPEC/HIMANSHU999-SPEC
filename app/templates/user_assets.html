@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ target_user.username }}'s Assets - IT Stock Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3><i class="bi bi-person-badge"></i> Assets Assigned to {{ target_user.username }}
+            {% if target_user.role == 'admin' %}<span class="badge bg-danger">Admin</span>
+            {% else %}<span class="badge bg-primary">Staff</span>{% endif %}
+        </h3>
+        {% if target_user.department %}<small class="text-muted">Department: {{ target_user.department }}</small>{% endif %}
+        {% if target_user.email %} | <small class="text-muted">{{ target_user.email }}</small>{% endif %}
+    </div>
+    <a href="{{ url_for('stock.manage_users') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back to Users</a>
+</div>
+
+{% if assets %}
+<div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+        <thead class="table-primary">
+            <tr>
+                <th>#</th>
+                <th>Asset Tag</th>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th>Manufacturer / Model</th>
+                <th>Serial Number</th>
+                <th>Campus</th>
+                <th>Status</th>
+                <th>Condition</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for asset in assets %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><small>{{ asset.asset_tag or '-' }}</small></td>
+                <td>{{ asset.item_name }}</td>
+                <td>{{ asset.category or '-' }}</td>
+                <td><small>{{ asset.manufacturer or '' }} {{ asset.model or '' }}</small></td>
+                <td><small>{{ asset.serial_number or '-' }}</small></td>
+                <td>{{ asset.campus.name if asset.campus else '-' }}</td>
+                <td>
+                    {% if asset.status == 'Active' %}<span class="badge bg-success">Active</span>
+                    {% elif asset.status == 'Under Repair' %}<span class="badge bg-warning text-dark">Under Repair</span>
+                    {% else %}<span class="badge bg-secondary">{{ asset.status or '-' }}</span>{% endif %}
+                </td>
+                <td>
+                    {% if asset.condition == 'Good' %}<span class="badge bg-success">Good</span>
+                    {% elif asset.condition == 'Damaged' %}<span class="badge bg-danger">Damaged</span>
+                    {% else %}<span class="badge bg-warning text-dark">{{ asset.condition }}</span>{% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('stock.edit_stock', stock_id=asset.id) }}" class="btn btn-sm btn-outline-warning" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="text-muted">{{ assets | length }} asset(s) assigned</p>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> No assets assigned to this user.
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Manage Users - IT Stock Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3><i class="bi bi-people"></i> Manage Users</h3>
+    <div>
+        <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-sm"><i class="bi bi-person-plus"></i> Register New User</a>
+        <a href="{{ url_for('stock.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+        <thead class="table-primary">
+            <tr>
+                <th>#</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Department</th>
+                <th>Email</th>
+                <th>Assets Assigned</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><i class="bi bi-person-circle"></i> {{ user.username }}</td>
+                <td>
+                    {% if user.role == 'admin' %}<span class="badge bg-danger">Admin</span>
+                    {% else %}<span class="badge bg-primary">Staff</span>{% endif %}
+                </td>
+                <td>{{ user.department or '-' }}</td>
+                <td>{{ user.email or '-' }}</td>
+                <td>
+                    <a href="{{ url_for('stock.user_assets', user_id=user.id) }}" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-box-seam"></i> {{ user.assigned_assets | length }} asset(s)
+                    </a>
+                </td>
+                <td><small>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '-' }}</small></td>
+                <td>
+                    {% if user.id != current_user.id %}
+                    <form method="POST" action="{{ url_for('stock.delete_user', user_id=user.id) }}" style="display:inline"
+                          onsubmit="return confirm('Delete user {{ user.username }}? Their assigned assets will be unassigned.')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete User">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                    {% else %}
+                    <small class="text-muted">(You)</small>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="text-muted">{{ users | length }} user(s) total</p>
+{% endblock %}
