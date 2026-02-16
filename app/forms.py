@@ -88,3 +88,11 @@ class UploadExcelForm(FlaskForm):
         FileAllowed(['xlsx'], 'Only Excel files (.xlsx) are allowed!')
     ])
     submit = SubmitField('Upload & Import')
+
+
+class UploadEmployeesForm(FlaskForm):
+    file = FileField('Excel File', validators=[
+        DataRequired(),
+        FileAllowed(['xlsx'], 'Only Excel files (.xlsx) are allowed!')
+    ])
+    submit = SubmitField('Upload & Import Employees')

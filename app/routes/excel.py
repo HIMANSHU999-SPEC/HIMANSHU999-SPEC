@@ -7,14 +7,15 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from app import db
-from app.models import Stock, Campus
-from app.forms import UploadExcelForm
+from app.models import Stock, Campus, User
+from app.forms import UploadExcelForm, UploadEmployeesForm
 
 excel_bp = Blueprint('excel', __name__)
 
 EXPECTED_COLUMNS = [
     'item_name', 'category', 'quantity', 'unit', 'unit_price', 'condition',
-    'status', 'asset_tag', 'serial_number', 'manufacturer', 'model', 'department', 'remarks'
+    'status', 'asset_tag', 'serial_number', 'manufacturer', 'model', 'department',
+    'assigned_to', 'remarks'
 ]
 
 
@@ -63,6 +64,18 @@ def upload_excel():
                         errors.append(f"Row {row_num}: Asset tag '{asset_tag}' already exists, skipped.")
                         continue
 
+                    # Resolve assigned_to username
+                    assigned_user_id = None
+                    assigned_username = str(row.get('assigned_to', '')).strip() if pd.notna(row.get('assigned_to')) else ''
+                    if assigned_username and assigned_username != 'nan':
+                        user = User.query.filter(
+                            db.func.lower(User.username) == assigned_username.lower()
+                        ).first()
+                        if user:
+                            assigned_user_id = user.id
+                        else:
+                            errors.append(f"Row {row_num}: User '{assigned_username}' not found, asset imported unassigned.")
+
                     stock = Stock(
                         item_name=item_name,
                         category=str(row.get('category', '')).strip() if pd.notna(row.get('category')) else '',
@@ -77,6 +90,7 @@ def upload_excel():
                         manufacturer=str(row.get('manufacturer', '')).strip() if pd.notna(row.get('manufacturer')) else None,
                         model=str(row.get('model', '')).strip() if pd.notna(row.get('model')) else None,
                         department=str(row.get('department', '')).strip() if pd.notna(row.get('department')) else None,
+                        assigned_to=assigned_user_id,
                         remarks=str(row.get('remarks', '')).strip() if pd.notna(row.get('remarks')) else '',
                         campus_id=campus_id,
                         added_by=current_user.username,
@@ -113,7 +127,8 @@ def download_template():
 
     headers = [
         'item_name', 'category', 'quantity', 'unit', 'unit_price', 'condition',
-        'status', 'asset_tag', 'serial_number', 'manufacturer', 'model', 'department', 'remarks'
+        'status', 'asset_tag', 'serial_number', 'manufacturer', 'model',
+        'department', 'assigned_to', 'remarks'
     ]
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
     header_font = Font(bold=True, color='FFFFFF', size=11)
@@ -129,13 +144,54 @@ def download_template():
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
 
-    # Sample row
-    sample = ['Dell Latitude 5540', 'Laptop', 10, 'pcs', 45000, 'Good',
-              'Active', 'IT-2024-0001', 'SN123456', 'Dell', 'Latitude 5540', 'IT', 'Company laptop']
-    for col_idx, val in enumerate(sample, 1):
-        cell = ws.cell(row=2, column=col_idx, value=val)
-        cell.border = thin_border
+    # Sample rows (multiple to show variety)
+    samples = [
+        ['Dell Latitude 5540', 'Laptop', 1, 'pcs', 45000, 'Good',
+         'Active', 'IT-2024-0001', 'SN123456', 'Dell', 'Latitude 5540', 'IT', 'john.doe', 'Assigned laptop'],
+        ['HP LaserJet Pro', 'Printer', 2, 'pcs', 18000, 'Good',
+         'Active', 'IT-2024-0002', 'SN789012', 'HP', 'LaserJet Pro M404', 'Admin', '', 'Floor 2 printer'],
+        ['Logitech MX Keys', 'Keyboard', 5, 'pcs', 3500, 'Good',
+         'In Storage', '', '', 'Logitech', 'MX Keys', 'IT', 'jane.smith', 'Wireless keyboard'],
+    ]
+    for row_idx, sample in enumerate(samples, 2):
+        for col_idx, val in enumerate(sample, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
 
+    # Instructions sheet
+    ws_help = wb.create_sheet(title='Instructions')
+    instructions = [
+        ['Column', 'Required', 'Description'],
+        ['item_name', 'YES', 'Name of the asset (e.g. Dell Latitude 5540)'],
+        ['category', 'No', 'Laptop, Desktop, Monitor, Printer, Scanner, Phone, Tablet, Server, Networking, etc.'],
+        ['quantity', 'YES', 'Number of items (integer)'],
+        ['unit', 'No', 'Unit of measure: pcs, kg, litre (default: pcs)'],
+        ['unit_price', 'No', 'Price per unit (decimal number)'],
+        ['condition', 'No', 'Good / Damaged / Needs Repair (default: Good)'],
+        ['status', 'No', 'Active / In Storage / Under Repair / Retired / Lost-Stolen / Disposed (default: Active)'],
+        ['asset_tag', 'No', 'Unique asset tag (e.g. IT-2024-0001). Must not already exist in the system.'],
+        ['serial_number', 'No', 'Manufacturer serial number'],
+        ['manufacturer', 'No', 'Brand / manufacturer name'],
+        ['model', 'No', 'Model name or number'],
+        ['department', 'No', 'Department the asset belongs to'],
+        ['assigned_to', 'No', 'Username of the employee to assign this asset to. Must match an existing user in the system.'],
+        ['remarks', 'No', 'Any additional notes'],
+    ]
+    help_header_fill = PatternFill(start_color='2E75B6', end_color='2E75B6', fill_type='solid')
+    help_header_font = Font(bold=True, color='FFFFFF', size=11)
+    for row_idx, row_data in enumerate(instructions, 1):
+        for col_idx, val in enumerate(row_data, 1):
+            cell = ws_help.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            if row_idx == 1:
+                cell.fill = help_header_fill
+                cell.font = help_header_font
+    ws_help.column_dimensions['A'].width = 18
+    ws_help.column_dimensions['B'].width = 10
+    ws_help.column_dimensions['C'].width = 80
+
+    # Resize data sheet columns
+    wb.active = ws
     for col in ws.columns:
         max_length = max(len(str(cell.value or '')) for cell in col) + 4
         ws.column_dimensions[col[0].column_letter].width = max_length
@@ -315,4 +371,163 @@ def download_all_stock():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name='stock_all_campuses.xlsx'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bulk Employee Upload
+# ---------------------------------------------------------------------------
+
+@excel_bp.route('/upload/employees', methods=['GET', 'POST'])
+@login_required
+def upload_employees():
+    if not current_user.is_admin():
+        flash('Only admins can bulk-upload employees.', 'danger')
+        return redirect(url_for('stock.dashboard'))
+
+    form = UploadEmployeesForm()
+    if form.validate_on_submit():
+        file = form.file.data
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        try:
+            df = pd.read_excel(filepath, engine='openpyxl')
+            df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
+
+            imported = 0
+            skipped = 0
+            errors = []
+            for idx, row in df.iterrows():
+                row_num = idx + 2
+                try:
+                    username = str(row.get('username', '')).strip()
+                    if not username or username == 'nan':
+                        errors.append(f"Row {row_num}: Missing username, skipped.")
+                        continue
+
+                    password = str(row.get('password', '')).strip()
+                    if not password or password == 'nan':
+                        password = 'changeme123'
+
+                    # Skip if user already exists
+                    if User.query.filter(db.func.lower(User.username) == username.lower()).first():
+                        skipped += 1
+                        errors.append(f"Row {row_num}: Username '{username}' already exists, skipped.")
+                        continue
+
+                    role = str(row.get('role', 'staff')).strip().lower() if pd.notna(row.get('role')) else 'staff'
+                    if role not in ('admin', 'staff'):
+                        role = 'staff'
+
+                    department = str(row.get('department', '')).strip() if pd.notna(row.get('department')) else None
+                    if department == 'nan' or department == '':
+                        department = None
+
+                    email = str(row.get('email', '')).strip() if pd.notna(row.get('email')) else None
+                    if email == 'nan' or email == '':
+                        email = None
+
+                    user = User(
+                        username=username,
+                        role=role,
+                        department=department,
+                        email=email,
+                    )
+                    user.set_password(password)
+                    db.session.add(user)
+                    imported += 1
+
+                except Exception as e:
+                    errors.append(f"Row {row_num}: {str(e)}")
+
+            db.session.commit()
+            flash(f'Successfully imported {imported} employee(s). {skipped} skipped (already exist).', 'success')
+            if errors:
+                flash(f'{len(errors)} row(s) had issues: ' + '; '.join(errors[:5]), 'warning')
+
+        except Exception as e:
+            flash(f'Error reading Excel file: {str(e)}', 'danger')
+        finally:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+        return redirect(url_for('stock.manage_users'))
+
+    return render_template('upload_employees.html', form=form)
+
+
+@excel_bp.route('/download/employee-template')
+@login_required
+def download_employee_template():
+    """Download a blank Excel template for bulk employee upload."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Employee Template'
+
+    headers = ['username', 'password', 'role', 'department', 'email']
+    header_fill = PatternFill(start_color='28A745', end_color='28A745', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # Sample rows
+    samples = [
+        ['john.doe', 'password123', 'staff', 'IT', 'john.doe@company.com'],
+        ['jane.smith', 'securePass!', 'staff', 'Finance', 'jane.smith@company.com'],
+        ['bob.admin', 'adminPass1', 'admin', 'IT', 'bob.admin@company.com'],
+    ]
+    for row_idx, sample in enumerate(samples, 2):
+        for col_idx, val in enumerate(sample, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+
+    # Instructions sheet
+    ws_help = wb.create_sheet(title='Instructions')
+    instructions = [
+        ['Column', 'Required', 'Description'],
+        ['username', 'YES', 'Unique username for login (3-80 characters). Must not already exist in the system.'],
+        ['password', 'No', 'Password for the account (min 6 chars). Defaults to "changeme123" if left blank.'],
+        ['role', 'No', 'Either "admin" or "staff". Defaults to "staff" if left blank.'],
+        ['department', 'No', 'Department name (e.g. IT, Finance, HR, Admin)'],
+        ['email', 'No', 'Email address of the employee'],
+    ]
+    help_header_fill = PatternFill(start_color='1E7E34', end_color='1E7E34', fill_type='solid')
+    help_header_font = Font(bold=True, color='FFFFFF', size=11)
+    for row_idx, row_data in enumerate(instructions, 1):
+        for col_idx, val in enumerate(row_data, 1):
+            cell = ws_help.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            if row_idx == 1:
+                cell.fill = help_header_fill
+                cell.font = help_header_font
+    ws_help.column_dimensions['A'].width = 15
+    ws_help.column_dimensions['B'].width = 10
+    ws_help.column_dimensions['C'].width = 80
+
+    # Resize data sheet columns
+    wb.active = ws
+    for col in ws.columns:
+        max_length = max(len(str(cell.value or '')) for cell in col) + 4
+        ws.column_dimensions[col[0].column_letter].width = max_length
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='employee_upload_template.xlsx'
     )

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Bulk Upload Employees - IT Stock Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5><i class="bi bi-people-fill"></i> Bulk Upload Employees from Excel</h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info">
+                    <strong><i class="bi bi-info-circle"></i> Instructions:</strong>
+                    <ol class="mb-0 mt-2">
+                        <li>Download the <a href="{{ url_for('excel.download_employee_template') }}">Employee Excel template</a> first.</li>
+                        <li>Fill in employee data following the template columns.</li>
+                        <li>Required column: <code>username</code></li>
+                        <li>Optional columns: <code>password</code> (default: changeme123), <code>role</code> (default: staff), <code>department</code>, <code>email</code></li>
+                        <li>Existing usernames will be skipped automatically.</li>
+                        <li>Upload the file (.xlsx only).</li>
+                    </ol>
+                </div>
+
+                <div class="mb-3">
+                    <a href="{{ url_for('excel.download_employee_template') }}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-download"></i> Download Employee Template
+                    </a>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">Excel File (.xlsx) *</label>
+                        {{ form.file(class="form-control", accept=".xlsx") }}
+                        {% for error in form.file.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-success") }}
+                        <a href="{{ url_for('stock.manage_users') }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
